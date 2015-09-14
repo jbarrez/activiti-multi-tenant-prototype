@@ -24,7 +24,6 @@ import javax.sql.DataSource;
 
 import org.activiti.engine.ActivitiException;
 import org.activiti.engine.ProcessEngine;
-import org.activiti.engine.impl.SchemaOperationsProcessEngineBuild;
 import org.activiti.engine.impl.cfg.ProcessEngineConfigurationImpl;
 import org.activiti.engine.impl.db.DbSqlSessionFactory;
 import org.activiti.engine.impl.interceptor.CommandInterceptor;
@@ -105,37 +104,40 @@ public class MultiTenantProcessEngineConfiguration extends ProcessEngineConfigur
     this.sqlSessionFactory = multiTenantSqlSessionFactory;
     
     for (String tenantId : identityManagementService.getAllTenants()) {
+      initSqlSessionFactoryForTenant(multiTenantSqlSessionFactory, tenantId);
+    }
+  }
+
+  protected void initSqlSessionFactoryForTenant(MultiTenantSqlSessionFactory multiTenantSqlSessionFactory, String tenantId) {
+    logger.info("Initializing sql session factory for tenant " + tenantId);
+     
+    InputStream inputStream = null;
+    try {
+      inputStream = getMyBatisXmlConfigurationStream();
+
+      DataSource dataSource = datasources.get(tenantId);
+      String databaseType = tenantToDataSourceConfigurationMap.get(tenantId).getDatabaseType();
       
-      logger.info("Initializing sql session factory for tenant " + tenantId);
-       
-      InputStream inputStream = null;
-      try {
-        inputStream = getMyBatisXmlConfigurationStream();
-
-        DataSource dataSource = datasources.get(tenantId);
-        String databaseType = tenantToDataSourceConfigurationMap.get(tenantId).getDatabaseType();
-        
-        Environment environment = new Environment("default", transactionFactory, dataSource);
-        Reader reader = new InputStreamReader(inputStream);
-        Properties properties = new Properties();
-        properties.put("prefix", databaseTablePrefix);
-        if (tenantToDataSourceConfigurationMap.get(tenantId).getDatabaseType() != null) {
-          properties.put("limitBefore", DbSqlSessionFactory.databaseSpecificLimitBeforeStatements.get(databaseType));
-          properties.put("limitAfter", DbSqlSessionFactory.databaseSpecificLimitAfterStatements.get(databaseType));
-          properties.put("limitBetween", DbSqlSessionFactory.databaseSpecificLimitBetweenStatements.get(databaseType));
-          properties.put("limitOuterJoinBetween", DbSqlSessionFactory.databaseOuterJoinLimitBetweenStatements.get(databaseType));
-          properties.put("orderBy", DbSqlSessionFactory.databaseSpecificOrderByStatements.get(databaseType));
-          properties.put("limitBeforeNativeQuery", ObjectUtils.toString(DbSqlSessionFactory.databaseSpecificLimitBeforeNativeQueryStatements.get(databaseType)));
-        }
-
-        Configuration configuration = initMybatisConfiguration(environment, reader, properties);
-        multiTenantSqlSessionFactory.addConfig(tenantId, configuration);
-        
-      } catch (Exception e) {
-        throw new ActivitiException("Error while building ibatis SqlSessionFactory: " + e.getMessage(), e);
-      } finally {
-        IoUtil.closeSilently(inputStream);
+      Environment environment = new Environment("default", transactionFactory, dataSource);
+      Reader reader = new InputStreamReader(inputStream);
+      Properties properties = new Properties();
+      properties.put("prefix", databaseTablePrefix);
+      if (tenantToDataSourceConfigurationMap.get(tenantId).getDatabaseType() != null) {
+        properties.put("limitBefore", DbSqlSessionFactory.databaseSpecificLimitBeforeStatements.get(databaseType));
+        properties.put("limitAfter", DbSqlSessionFactory.databaseSpecificLimitAfterStatements.get(databaseType));
+        properties.put("limitBetween", DbSqlSessionFactory.databaseSpecificLimitBetweenStatements.get(databaseType));
+        properties.put("limitOuterJoinBetween", DbSqlSessionFactory.databaseOuterJoinLimitBetweenStatements.get(databaseType));
+        properties.put("orderBy", DbSqlSessionFactory.databaseSpecificOrderByStatements.get(databaseType));
+        properties.put("limitBeforeNativeQuery", ObjectUtils.toString(DbSqlSessionFactory.databaseSpecificLimitBeforeNativeQueryStatements.get(databaseType)));
       }
+
+      Configuration configuration = initMybatisConfiguration(environment, reader, properties);
+      multiTenantSqlSessionFactory.addConfig(tenantId, configuration);
+      
+    } catch (Exception e) {
+      throw new ActivitiException("Error while building ibatis SqlSessionFactory: " + e.getMessage(), e);
+    } finally {
+      IoUtil.closeSilently(inputStream);
     }
   }
   
@@ -150,16 +152,40 @@ public class MultiTenantProcessEngineConfiguration extends ProcessEngineConfigur
     ProcessEngine processEngine = super.buildProcessEngine();
     
     for (String tenantId : identityManagementService.getAllTenants()) {
-      logger.info("creating/validating database schema for tenant " + tenantId);
-      
-      identityManagementService.setCurrentTenantId(tenantId);
-      getCommandExecutor().execute(getSchemaCommandConfig(), new ExecuteSchemaOperationCommand(multiTenantDatabaseSchemaUpdate));
+      createTenantSchema(tenantId);
     }
     
     identityManagementService.clearCurrentTenantId();
     
     return processEngine;
   }
+
+  protected void createTenantSchema(String tenantId) {
+    logger.info("creating/validating database schema for tenant " + tenantId);
+    identityManagementService.setCurrentTenantId(tenantId);
+    getCommandExecutor().execute(getSchemaCommandConfig(), new ExecuteSchemaOperationCommand(multiTenantDatabaseSchemaUpdate));
+  }
+  
+  public void addMultiTenantDataSourceConfiguration(MultiTenantDataSourceConfiguration dataSourceConfiguration) {
+    
+    String tenantId = dataSourceConfiguration.getTenantId();
+    
+    // Add datasource
+    tenantToDataSourceConfigurationMap.put(tenantId, dataSourceConfiguration);
+    DataSource dataSource = dataSourceConfiguration.getDataSource();
+    datasources.put(tenantId, dataSource);
+    
+    // Create session factory for tenant
+    initSqlSessionFactoryForTenant((MultiTenantSqlSessionFactory) sqlSessionFactory, tenantId);
+    
+    multiTenantDbSqlSessionFactory.addDatabaseType(tenantId, dataSourceConfiguration.getDatabaseType());
+    
+    // Init schema
+    createTenantSchema(tenantId);
+  }
+  
+  
+  // Getters and Setters ////////////////////////////////////////////////////////////////////////
   
   public IdentityManagementService getIdentityManagementService() {
     return identityManagementService;

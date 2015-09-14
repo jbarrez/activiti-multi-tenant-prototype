@@ -61,9 +61,9 @@ public class Main {
     
     List<MultiTenantDataSourceConfiguration> datasourceConfigurations = new ArrayList<MultiTenantDataSourceConfiguration>();
     datasourceConfigurations.add(new MybatisMultiTenantDatasourceConfiguration("alfresco", 
-        ProcessEngineConfigurationImpl.DATABASE_TYPE_H2, "jdbc:h2:mem:activiti-Alfresco;DB_CLOSE_DELAY=1000", "sa", "", "org.h2.Driver"));
+        ProcessEngineConfigurationImpl.DATABASE_TYPE_H2, "jdbc:h2:mem:activiti-alfresco;DB_CLOSE_DELAY=1000", "sa", "", "org.h2.Driver"));
     datasourceConfigurations.add(new MybatisMultiTenantDatasourceConfiguration("acme", 
-        ProcessEngineConfigurationImpl.DATABASE_TYPE_H2, "jdbc:h2:mem:activiti-Uni;DB_CLOSE_DELAY=1000", "sa", "", "org.h2.Driver"));
+        ProcessEngineConfigurationImpl.DATABASE_TYPE_H2, "jdbc:h2:mem:activiti-acme;DB_CLOSE_DELAY=1000", "sa", "", "org.h2.Driver"));
     datasourceConfigurations.add(new MybatisMultiTenantDatasourceConfiguration("starkindustries", 
         ProcessEngineConfigurationImpl.DATABASE_TYPE_MYSQL, "jdbc:mysql://127.0.0.1:3306/starkindustries?characterEncoding=UTF-8", "alfresco", "alfresco", "com.mysql.jdbc.Driver"));
     config.setDatasourceConfigurations(datasourceConfigurations);
@@ -73,14 +73,32 @@ public class Main {
     
     processEngine = config.buildProcessEngine();
     
-    StartProcessInstance("joram");
-    StartProcessInstance("raphael");
-    StartProcessInstance("tony");
+    // Starting process instances for a few tenants
     
-    System.out.println("TEST");
+    startProcessInstance("joram");
+    startProcessInstance("joram");
+    startProcessInstance("joram");
+    startProcessInstance("raphael");
+    startProcessInstance("raphael");
+    startProcessInstance("tony");
+    
+    // Adding a new tenant
+    dummyIdentityManagementService.addTenant("dailyplanet");
+    dummyIdentityManagementService.addUser("dailyplanet", "louis");
+    dummyIdentityManagementService.addUser("dailyplanet", "clark");
+    
+    config.addMultiTenantDataSourceConfiguration(new MybatisMultiTenantDatasourceConfiguration("dailyplanet", 
+        ProcessEngineConfigurationImpl.DATABASE_TYPE_MYSQL, "jdbc:mysql://127.0.0.1:3306/dailyplanet?characterEncoding=UTF-8", "alfresco", "alfresco", "com.mysql.jdbc.Driver"));
+    
+    // Start process instance with new tenant
+    startProcessInstance("clark");
+    startProcessInstance("clark");
+    
+    System.out.println();
+    System.out.println("ALL DONE");
   }
 
-  private static void StartProcessInstance(String userId) {
+  private static void startProcessInstance(String userId) {
     
     System.out.println();
     System.out.println("Starting process instance for user " + userId);
@@ -95,8 +113,10 @@ public class Main {
       vars.put("data", "Hello from Joram!");
     } else if (userId.equals("raphael")) {
       vars.put("data", "Hello from Raphael!");
-    } else {
+    } else if (userId.equals("tony")){
       vars.put("data", "Hello from Iron man!");
+    } else {
+      vars.put("data", "Hello from Superman!");
     }
     
     ProcessInstance processInstance = processEngine.getRuntimeService().startProcessInstanceByKey("oneTaskProcess", vars);
@@ -105,5 +125,5 @@ public class Main {
     
     System.out.println("Got " + processEngine.getHistoryService().createHistoricProcessInstanceQuery().count() + " process instances in the system");
   }
-
+  
 }
