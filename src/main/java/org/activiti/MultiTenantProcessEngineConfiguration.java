@@ -48,8 +48,7 @@ public class MultiTenantProcessEngineConfiguration extends ProcessEngineConfigur
   
   protected String multiTenantDatabaseSchemaUpdate;
   
-  protected List<MultiTenantDataSourceConfiguration> datasourceConfiguration;
-  protected Map<String, MultiTenantDataSourceConfiguration> tenantToDataSourceConfigurationMap = new HashMap<String, MultiTenantDataSourceConfiguration>();
+  protected List<MultiTenantDataSourceConfiguration> dataSourceConfigurations;
   
   protected MultiTenantDbSqlSessionFactory multiTenantDbSqlSessionFactory;
 
@@ -74,25 +73,17 @@ public class MultiTenantProcessEngineConfiguration extends ProcessEngineConfigur
 
   @Override
   protected void initDataSource() {
-    
-    // Mapping the list to an easier to use map
-    for (MultiTenantDataSourceConfiguration datasourceConfigurations : datasourceConfiguration) {
-      tenantToDataSourceConfigurationMap.put(datasourceConfigurations.getTenantId(), datasourceConfigurations);
-    }
-    datasourceConfiguration = null; // Not used anymore later on, so safe to set it to null
-    
     // Getting the datasources from the config
-    for (String tenantId : tenantToDataSourceConfigurationMap.keySet()) {
-      DataSource dataSource = tenantToDataSourceConfigurationMap.get(tenantId).getDataSource();
-      datasources.put(tenantId, dataSource);
+    for(MultiTenantDataSourceConfiguration dataSourceConfig : dataSourceConfigurations) {
+      datasources.put(dataSourceConfig.getTenantId(), dataSourceConfig.getDataSource());
     }
   }
   
   @Override
   protected DbSqlSessionFactory createDbSqlSessionFactory() {
     multiTenantDbSqlSessionFactory = new MultiTenantDbSqlSessionFactory(identityManagementService);
-    for (String tenantId : tenantToDataSourceConfigurationMap.keySet()) {
-      multiTenantDbSqlSessionFactory.addDatabaseType(tenantId, tenantToDataSourceConfigurationMap.get(tenantId).getDatabaseType());
+    for(MultiTenantDataSourceConfiguration dataSourceConfig : dataSourceConfigurations) {
+      multiTenantDbSqlSessionFactory.addDatabaseType(dataSourceConfig.getTenantId(), dataSourceConfig.getDatabaseType());
     }
     return multiTenantDbSqlSessionFactory;
   }
@@ -116,13 +107,22 @@ public class MultiTenantProcessEngineConfiguration extends ProcessEngineConfigur
       inputStream = getMyBatisXmlConfigurationStream();
 
       DataSource dataSource = datasources.get(tenantId);
-      String databaseType = tenantToDataSourceConfigurationMap.get(tenantId).getDatabaseType();
+      
+      MultiTenantDataSourceConfiguration dataSourceConfiguration = null;
+      for (MultiTenantDataSourceConfiguration d : dataSourceConfigurations) {
+        if (d.getTenantId().equals(tenantId)) {
+          dataSourceConfiguration = d;
+          break;
+        }
+      }
+      
+      String databaseType = dataSourceConfiguration.getDatabaseType();
       
       Environment environment = new Environment("default", transactionFactory, dataSource);
       Reader reader = new InputStreamReader(inputStream);
       Properties properties = new Properties();
       properties.put("prefix", databaseTablePrefix);
-      if (tenantToDataSourceConfigurationMap.get(tenantId).getDatabaseType() != null) {
+      if (databaseType != null) {
         properties.put("limitBefore", DbSqlSessionFactory.databaseSpecificLimitBeforeStatements.get(databaseType));
         properties.put("limitAfter", DbSqlSessionFactory.databaseSpecificLimitAfterStatements.get(databaseType));
         properties.put("limitBetween", DbSqlSessionFactory.databaseSpecificLimitBetweenStatements.get(databaseType));
@@ -154,7 +154,6 @@ public class MultiTenantProcessEngineConfiguration extends ProcessEngineConfigur
     for (String tenantId : identityManagementService.getAllTenants()) {
       createTenantSchema(tenantId);
     }
-    
     identityManagementService.clearCurrentTenantId();
     
     return processEngine;
@@ -171,13 +170,13 @@ public class MultiTenantProcessEngineConfiguration extends ProcessEngineConfigur
     String tenantId = dataSourceConfiguration.getTenantId();
     
     // Add datasource
-    tenantToDataSourceConfigurationMap.put(tenantId, dataSourceConfiguration);
-    DataSource dataSource = dataSourceConfiguration.getDataSource();
-    datasources.put(tenantId, dataSource);
+    dataSourceConfigurations.add(dataSourceConfiguration);
+    datasources.put(tenantId, dataSourceConfiguration.getDataSource());
     
     // Create session factory for tenant
     initSqlSessionFactoryForTenant((MultiTenantSqlSessionFactory) sqlSessionFactory, tenantId);
     
+    // Register with db sql session factory
     multiTenantDbSqlSessionFactory.addDatabaseType(tenantId, dataSourceConfiguration.getDatabaseType());
     
     // Init schema
@@ -195,12 +194,12 @@ public class MultiTenantProcessEngineConfiguration extends ProcessEngineConfigur
     this.identityManagementService = identityManagementService;
   }
 
-  public List<MultiTenantDataSourceConfiguration> getDatasourceConfigurations() {
-    return datasourceConfiguration;
+  public List<MultiTenantDataSourceConfiguration> getDataSourceConfigurations() {
+    return dataSourceConfigurations;
   }
 
-  public void setDatasourceConfigurations(List<MultiTenantDataSourceConfiguration> datasourceConfigurations) {
-    this.datasourceConfiguration = datasourceConfigurations;
+  public void setDataSourceConfigurations(List<MultiTenantDataSourceConfiguration> dataSourceConfigurations) {
+    this.dataSourceConfigurations = dataSourceConfigurations;
   }
-  
+
 }

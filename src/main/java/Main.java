@@ -66,7 +66,7 @@ public class Main {
         ProcessEngineConfigurationImpl.DATABASE_TYPE_H2, "jdbc:h2:mem:activiti-acme;DB_CLOSE_DELAY=1000", "sa", "", "org.h2.Driver"));
     datasourceConfigurations.add(new MybatisMultiTenantDatasourceConfiguration("starkindustries", 
         ProcessEngineConfigurationImpl.DATABASE_TYPE_MYSQL, "jdbc:mysql://127.0.0.1:3306/starkindustries?characterEncoding=UTF-8", "alfresco", "alfresco", "com.mysql.jdbc.Driver"));
-    config.setDatasourceConfigurations(datasourceConfigurations);
+    config.setDataSourceConfigurations(datasourceConfigurations);
     
     config.setIdentityManagementService(dummyIdentityManagementService);
     identityManagementService = dummyIdentityManagementService;
