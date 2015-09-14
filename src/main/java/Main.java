@@ -49,18 +49,23 @@ public class Main {
     dummyIdentityManagementService.addUser("acme", "raphael");
     dummyIdentityManagementService.addUser("acme", "john");
     
+    dummyIdentityManagementService.addTenant("starkindustries");
+    dummyIdentityManagementService.addUser("starkindustries", "tony");
+    
     
     // Booting up the Activiti Engine
     
     MultiTenantProcessEngineConfiguration config = new MultiTenantProcessEngineConfiguration();
     
-    config.setDatabaseSchemaUpdate(MultiTenantProcessEngineConfiguration.DB_SCHEMA_UPDATE_CREATE_DROP);
+    config.setDatabaseSchemaUpdate(MultiTenantProcessEngineConfiguration.DB_SCHEMA_UPDATE_DROP_CREATE);
     
     List<MultiTenantDataSourceConfiguration> datasourceConfigurations = new ArrayList<MultiTenantDataSourceConfiguration>();
     datasourceConfigurations.add(new MybatisMultiTenantDatasourceConfiguration("alfresco", 
         ProcessEngineConfigurationImpl.DATABASE_TYPE_H2, "jdbc:h2:mem:activiti-Alfresco;DB_CLOSE_DELAY=1000", "sa", "", "org.h2.Driver"));
     datasourceConfigurations.add(new MybatisMultiTenantDatasourceConfiguration("acme", 
         ProcessEngineConfigurationImpl.DATABASE_TYPE_H2, "jdbc:h2:mem:activiti-Uni;DB_CLOSE_DELAY=1000", "sa", "", "org.h2.Driver"));
+    datasourceConfigurations.add(new MybatisMultiTenantDatasourceConfiguration("starkindustries", 
+        ProcessEngineConfigurationImpl.DATABASE_TYPE_MYSQL, "jdbc:mysql://127.0.0.1:3306/starkindustries?characterEncoding=UTF-8", "alfresco", "alfresco", "com.mysql.jdbc.Driver"));
     config.setDatasourceConfigurations(datasourceConfigurations);
     
     config.setIdentityManagementService(dummyIdentityManagementService);
@@ -70,6 +75,7 @@ public class Main {
     
     StartProcessInstance("joram");
     StartProcessInstance("raphael");
+    StartProcessInstance("tony");
     
     System.out.println("TEST");
   }
@@ -87,8 +93,10 @@ public class Main {
     Map<String, Object> vars = new HashMap<String, Object>();
     if (userId.equals("joram")) {
       vars.put("data", "Hello from Joram!");
-    } else {
+    } else if (userId.equals("raphael")) {
       vars.put("data", "Hello from Raphael!");
+    } else {
+      vars.put("data", "Hello from Iron man!");
     }
     
     ProcessInstance processInstance = processEngine.getRuntimeService().startProcessInstanceByKey("oneTaskProcess", vars);
