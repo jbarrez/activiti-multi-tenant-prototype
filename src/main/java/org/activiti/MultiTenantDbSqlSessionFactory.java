@@ -16,14 +16,20 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.activiti.engine.impl.db.DbSqlSessionFactory;
-import org.activiti.tenant.SecurityUtil;
+import org.activiti.tenant.IdentityManagementService;
 
 /**
  * @author Joram Barrez
  */
 public class MultiTenantDbSqlSessionFactory extends DbSqlSessionFactory {
   
+  protected IdentityManagementService identityManagementService;
+  
   protected Map<String, String> tenantToDatabaseTypeMap = new HashMap<String, String>();
+  
+  public MultiTenantDbSqlSessionFactory(IdentityManagementService identityManagementService) {
+    this.identityManagementService = identityManagementService;
+  }
   
   public void addDatabaseType(String tenantId, String databaseType) {
     tenantToDatabaseTypeMap.put(tenantId, databaseType);
@@ -31,7 +37,7 @@ public class MultiTenantDbSqlSessionFactory extends DbSqlSessionFactory {
   
   @Override
   public String getDatabaseType() {
-    return tenantToDatabaseTypeMap.get(SecurityUtil.currentTenantId.get());
+    return tenantToDatabaseTypeMap.get(identityManagementService.getCurrentTenantId());
   }
 
 }

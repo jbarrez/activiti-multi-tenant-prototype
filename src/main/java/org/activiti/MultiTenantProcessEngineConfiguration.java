@@ -30,8 +30,8 @@ import org.activiti.engine.impl.db.DbSqlSessionFactory;
 import org.activiti.engine.impl.interceptor.CommandInterceptor;
 import org.activiti.engine.impl.persistence.StrongUuidGenerator;
 import org.activiti.engine.impl.util.IoUtil;
-import org.activiti.tenant.SecurityUtil;
-import org.activiti.tenant.TenantComponent;
+import org.activiti.impl.db.ExecuteSchemaOperationCommand;
+import org.activiti.tenant.IdentityManagementService;
 import org.apache.commons.lang3.ObjectUtils;
 import org.apache.ibatis.mapping.Environment;
 import org.apache.ibatis.session.Configuration;
@@ -45,6 +45,10 @@ public class MultiTenantProcessEngineConfiguration extends ProcessEngineConfigur
   
   private static final Logger logger = LoggerFactory.getLogger(MultiTenantProcessEngineConfiguration.class);
   
+  protected IdentityManagementService identityManagementService;
+  
+  protected String multiTenantDatabaseSchemaUpdate;
+  
   protected List<MultiTenantDataSourceConfiguration> datasourceConfiguration;
   protected Map<String, MultiTenantDataSourceConfiguration> tenantToDataSourceConfigurationMap = new HashMap<String, MultiTenantDataSourceConfiguration>();
   
@@ -53,11 +57,6 @@ public class MultiTenantProcessEngineConfiguration extends ProcessEngineConfigur
   protected Map<String, DataSource> datasources = new HashMap<String, DataSource>();
 
   public MultiTenantProcessEngineConfiguration() {
-    
-    // Disable schema creation/validation
-    // We'll do it manually, see buildProcessEngine() method
-    this.databaseSchemaUpdate = null; 
-    
     // Using the UUID generator, as otherwise the ids are pulled from a global pool of ids, backed by
     // a database table. Which is impossible with a mult-database-schema setup.
     this.idGenerator = new StrongUuidGenerator();
@@ -69,26 +68,6 @@ public class MultiTenantProcessEngineConfiguration extends ProcessEngineConfigur
     
   }
   
-  @Override
-  public ProcessEngine buildProcessEngine() {
-    ProcessEngine processEngine = super.buildProcessEngine();
-    
-    for (String tenantId : datasources.keySet()) {
-     
-      SecurityUtil.currentTenantId.set(tenantId);
-      
-      logger.info("Creating/Validating database schema for tenant " + tenantId);
-      
-      ProcessEngineConfigurationImpl processEngineConfiguration = ((ProcessEngineConfigurationImpl) processEngine.getProcessEngineConfiguration());
-      processEngineConfiguration.setDatabaseSchemaUpdate("create-drop");
-      processEngineConfiguration.getCommandExecutor()
-        .execute(processEngineConfiguration.getSchemaCommandConfig(), new SchemaOperationsProcessEngineBuild());
-      
-    }
-    
-    return processEngine;
-  }
-
   @Override
   protected CommandInterceptor createTransactionInterceptor() {
     return null;
@@ -112,7 +91,7 @@ public class MultiTenantProcessEngineConfiguration extends ProcessEngineConfigur
   
   @Override
   protected DbSqlSessionFactory createDbSqlSessionFactory() {
-    multiTenantDbSqlSessionFactory = new MultiTenantDbSqlSessionFactory();
+    multiTenantDbSqlSessionFactory = new MultiTenantDbSqlSessionFactory(identityManagementService);
     for (String tenantId : tenantToDataSourceConfigurationMap.keySet()) {
       multiTenantDbSqlSessionFactory.addDatabaseType(tenantId, tenantToDataSourceConfigurationMap.get(tenantId).getDatabaseType());
     }
@@ -122,12 +101,12 @@ public class MultiTenantProcessEngineConfiguration extends ProcessEngineConfigur
   @Override
   protected void initSqlSessionFactory() {
     
-    MultiTenantSqlSessionFactory multiTenantSqlSessionFactory = new MultiTenantSqlSessionFactory();
+    MultiTenantSqlSessionFactory multiTenantSqlSessionFactory = new MultiTenantSqlSessionFactory(identityManagementService);
     this.sqlSessionFactory = multiTenantSqlSessionFactory;
     
-    for (String tenantId : TenantComponent.TENANT_MAPPING.keySet()) {
+    for (String tenantId : identityManagementService.getAllTenants()) {
       
-      System.out.println("Initializing sql session factory for tenant " + tenantId);
+      logger.info("Initializing sql session factory for tenant " + tenantId);
        
       InputStream inputStream = null;
       try {
@@ -158,6 +137,36 @@ public class MultiTenantProcessEngineConfiguration extends ProcessEngineConfigur
         IoUtil.closeSilently(inputStream);
       }
     }
+  }
+  
+  @Override
+  public ProcessEngine buildProcessEngine() {
+    
+    // Disable schema creation/validation by setting it to null.
+    // We'll do it manually, see buildProcessEngine() method (hence why it's copied first)
+    this.multiTenantDatabaseSchemaUpdate = this.databaseSchemaUpdate;
+    this.databaseSchemaUpdate = null; 
+    
+    ProcessEngine processEngine = super.buildProcessEngine();
+    
+    for (String tenantId : identityManagementService.getAllTenants()) {
+      logger.info("creating/validating database schema for tenant " + tenantId);
+      
+      identityManagementService.setCurrentTenantId(tenantId);
+      getCommandExecutor().execute(getSchemaCommandConfig(), new ExecuteSchemaOperationCommand(multiTenantDatabaseSchemaUpdate));
+    }
+    
+    identityManagementService.clearCurrentTenantId();
+    
+    return processEngine;
+  }
+  
+  public IdentityManagementService getIdentityManagementService() {
+    return identityManagementService;
+  }
+
+  public void setIdentityManagementService(IdentityManagementService identityManagementService) {
+    this.identityManagementService = identityManagementService;
   }
 
   public List<MultiTenantDataSourceConfiguration> getDatasourceConfigurations() {

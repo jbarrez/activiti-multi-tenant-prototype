@@ -12,18 +12,26 @@
  */
 package org.activiti.tenant;
 
+import java.util.Collection;
+
+
 /**
  * @author Joram Barrez
  */
-public class SecurityUtil {
+public interface IdentityManagementService {
   
-  public static ThreadLocal<String> currentUserId = new ThreadLocal<String>();
+  Collection<String> getAllTenants();
   
-  public static ThreadLocal<String> currentTenantId = new ThreadLocal<String>();
+  void setCurrentUserId(String userId);
   
-  public static void setUser(String userId) {
-    currentUserId.set(userId);
-    currentTenantId.set(TenantComponent.USER_TO_TENANT_MAPPING.get(userId));
-  }
-
+  String getCurrentUserId();
+  
+  void clearCurrentUserId();
+  
+  void setCurrentTenantId(String tenantid);
+  
+  String getCurrentTenantId();
+  
+  void clearCurrentTenantId();
+  
 }

@@ -24,7 +24,7 @@ import org.activiti.engine.impl.cfg.ProcessEngineConfigurationImpl;
 import org.activiti.engine.repository.Deployment;
 import org.activiti.engine.runtime.ProcessInstance;
 import org.activiti.engine.task.Task;
-import org.activiti.tenant.SecurityUtil;
+import org.activiti.tenant.IdentityManagementService;
 
 /**
  * @author Joram Barrez
@@ -32,16 +32,39 @@ import org.activiti.tenant.SecurityUtil;
 public class Main {
   
   private static ProcessEngine processEngine;
+
+  private static IdentityManagementService identityManagementService;
   
   public static void main(String[] args) {
+    
+    DummyIdentityManagementService dummyIdentityManagementService = new DummyIdentityManagementService();
+    
+    dummyIdentityManagementService.addTenant("alfresco");
+    dummyIdentityManagementService.addUser("alfresco", "joram");
+    dummyIdentityManagementService.addUser("alfresco", "tijs");
+    dummyIdentityManagementService.addUser("alfresco", "paul");
+    dummyIdentityManagementService.addUser("alfresco", "yvo");
+    
+    dummyIdentityManagementService.addTenant("acme");
+    dummyIdentityManagementService.addUser("acme", "raphael");
+    dummyIdentityManagementService.addUser("acme", "john");
+    
+    
+    // Booting up the Activiti Engine
+    
     MultiTenantProcessEngineConfiguration config = new MultiTenantProcessEngineConfiguration();
     
+    config.setDatabaseSchemaUpdate(MultiTenantProcessEngineConfiguration.DB_SCHEMA_UPDATE_CREATE_DROP);
+    
     List<MultiTenantDataSourceConfiguration> datasourceConfigurations = new ArrayList<MultiTenantDataSourceConfiguration>();
-    datasourceConfigurations.add(new MybatisMultiTenantDatasourceConfiguration("Alfresco", 
+    datasourceConfigurations.add(new MybatisMultiTenantDatasourceConfiguration("alfresco", 
         ProcessEngineConfigurationImpl.DATABASE_TYPE_H2, "jdbc:h2:mem:activiti-Alfresco;DB_CLOSE_DELAY=1000", "sa", "", "org.h2.Driver"));
-    datasourceConfigurations.add(new MybatisMultiTenantDatasourceConfiguration("Uni", 
+    datasourceConfigurations.add(new MybatisMultiTenantDatasourceConfiguration("acme", 
         ProcessEngineConfigurationImpl.DATABASE_TYPE_H2, "jdbc:h2:mem:activiti-Uni;DB_CLOSE_DELAY=1000", "sa", "", "org.h2.Driver"));
     config.setDatasourceConfigurations(datasourceConfigurations);
+    
+    config.setIdentityManagementService(dummyIdentityManagementService);
+    identityManagementService = dummyIdentityManagementService;
     
     processEngine = config.buildProcessEngine();
     
@@ -56,16 +79,16 @@ public class Main {
     System.out.println();
     System.out.println("Starting process instance for user " + userId);
     
-    SecurityUtil.setUser(userId);
+    identityManagementService.setCurrentUserId(userId);
     
     Deployment deployment = processEngine.getRepositoryService().createDeployment().addClasspathResource("oneTaskProcess.bpmn20.xml").deploy();
     System.out.println("Process deployed! Deployment id is " + deployment.getId());
     
     Map<String, Object> vars = new HashMap<String, Object>();
-    if (SecurityUtil.currentTenantId.get().equals("Alfresco")) {
-      vars.put("data", "Hello from Alfresco");
+    if (userId.equals("joram")) {
+      vars.put("data", "Hello from Joram!");
     } else {
-      vars.put("data", "Hello from UNI");
+      vars.put("data", "Hello from Raphael!");
     }
     
     ProcessInstance processInstance = processEngine.getRuntimeService().startProcessInstanceByKey("oneTaskProcess", vars);
