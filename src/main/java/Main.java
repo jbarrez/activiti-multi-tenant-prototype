@@ -24,7 +24,7 @@ import org.activiti.engine.impl.cfg.ProcessEngineConfigurationImpl;
 import org.activiti.engine.repository.Deployment;
 import org.activiti.engine.runtime.ProcessInstance;
 import org.activiti.engine.task.Task;
-import org.activiti.tenant.IdentityManagementService;
+import org.activiti.tenant.TenantInfoHolder;
 
 /**
  * @author Joram Barrez
@@ -33,24 +33,24 @@ public class Main {
   
   private static ProcessEngine processEngine;
 
-  private static IdentityManagementService identityManagementService;
+  private static TenantInfoHolder identityManagementService;
   
   public static void main(String[] args) {
     
-    DummyIdentityManagementService dummyIdentityManagementService = new DummyIdentityManagementService();
+    DummyTenantInfoHolder dummyTenantInfoHolder = new DummyTenantInfoHolder();
     
-    dummyIdentityManagementService.addTenant("alfresco");
-    dummyIdentityManagementService.addUser("alfresco", "joram");
-    dummyIdentityManagementService.addUser("alfresco", "tijs");
-    dummyIdentityManagementService.addUser("alfresco", "paul");
-    dummyIdentityManagementService.addUser("alfresco", "yvo");
+    dummyTenantInfoHolder.addTenant("alfresco");
+    dummyTenantInfoHolder.addUser("alfresco", "joram");
+    dummyTenantInfoHolder.addUser("alfresco", "tijs");
+    dummyTenantInfoHolder.addUser("alfresco", "paul");
+    dummyTenantInfoHolder.addUser("alfresco", "yvo");
     
-    dummyIdentityManagementService.addTenant("acme");
-    dummyIdentityManagementService.addUser("acme", "raphael");
-    dummyIdentityManagementService.addUser("acme", "john");
+    dummyTenantInfoHolder.addTenant("acme");
+    dummyTenantInfoHolder.addUser("acme", "raphael");
+    dummyTenantInfoHolder.addUser("acme", "john");
     
-    dummyIdentityManagementService.addTenant("starkindustries");
-    dummyIdentityManagementService.addUser("starkindustries", "tony");
+    dummyTenantInfoHolder.addTenant("starkindustries");
+    dummyTenantInfoHolder.addUser("starkindustries", "tony");
     
     
     // Booting up the Activiti Engine
@@ -68,8 +68,8 @@ public class Main {
         ProcessEngineConfigurationImpl.DATABASE_TYPE_MYSQL, "jdbc:mysql://127.0.0.1:3306/starkindustries?characterEncoding=UTF-8", "alfresco", "alfresco", "com.mysql.jdbc.Driver"));
     config.setDataSourceConfigurations(datasourceConfigurations);
     
-    config.setIdentityManagementService(dummyIdentityManagementService);
-    identityManagementService = dummyIdentityManagementService;
+    config.setTenantInfoHolder(dummyTenantInfoHolder);
+    identityManagementService = dummyTenantInfoHolder;
     
     processEngine = config.buildProcessEngine();
     
@@ -83,9 +83,9 @@ public class Main {
     startProcessInstance("tony");
     
     // Adding a new tenant
-    dummyIdentityManagementService.addTenant("dailyplanet");
-    dummyIdentityManagementService.addUser("dailyplanet", "louis");
-    dummyIdentityManagementService.addUser("dailyplanet", "clark");
+    dummyTenantInfoHolder.addTenant("dailyplanet");
+    dummyTenantInfoHolder.addUser("dailyplanet", "louis");
+    dummyTenantInfoHolder.addUser("dailyplanet", "clark");
     
     config.addMultiTenantDataSourceConfiguration(new MybatisMultiTenantDatasourceConfiguration("dailyplanet", 
         ProcessEngineConfigurationImpl.DATABASE_TYPE_MYSQL, "jdbc:mysql://127.0.0.1:3306/dailyplanet?characterEncoding=UTF-8", "alfresco", "alfresco", "com.mysql.jdbc.Driver"));

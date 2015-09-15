@@ -17,7 +17,7 @@ import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.activiti.tenant.IdentityManagementService;
+import org.activiti.tenant.TenantInfoHolder;
 import org.apache.ibatis.exceptions.ExceptionFactory;
 import org.apache.ibatis.executor.ErrorContext;
 import org.apache.ibatis.executor.Executor;
@@ -37,13 +37,13 @@ import org.apache.ibatis.transaction.managed.ManagedTransactionFactory;
  */
 public class MultiTenantSqlSessionFactory implements SqlSessionFactory {
 
-  protected IdentityManagementService identityManagementService;
+  protected TenantInfoHolder tenantInfoHolder;
   
   /** Maps {tenantId, Coniguration */
   protected Map<String, Configuration> configMapping = new HashMap<String, Configuration>();
   
-  public MultiTenantSqlSessionFactory(IdentityManagementService identityManagementService) {
-    this.identityManagementService = identityManagementService;
+  public MultiTenantSqlSessionFactory(TenantInfoHolder tenantInfoHolder) {
+    this.tenantInfoHolder = tenantInfoHolder;
   }
   
   public void addConfig(String tenantId, Configuration configuration) {
@@ -51,7 +51,7 @@ public class MultiTenantSqlSessionFactory implements SqlSessionFactory {
   }
   
   public Configuration getConfiguration() {
-    return configMapping.get(identityManagementService.getCurrentTenantId());
+    return configMapping.get(tenantInfoHolder.getCurrentTenantId());
   }
 
   public SqlSession openSession() {

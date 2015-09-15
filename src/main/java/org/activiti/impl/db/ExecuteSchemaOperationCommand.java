@@ -16,7 +16,7 @@ import org.activiti.engine.ProcessEngineConfiguration;
 import org.activiti.engine.impl.cfg.ProcessEngineConfigurationImpl;
 import org.activiti.engine.impl.interceptor.Command;
 import org.activiti.engine.impl.interceptor.CommandContext;
-import org.activiti.tenant.IdentityManagementService;
+import org.activiti.tenant.TenantInfoHolder;
 
 
 /**
@@ -26,7 +26,7 @@ public class ExecuteSchemaOperationCommand implements Command<Void> {
   
   protected String schemaOperation;
   
-  protected IdentityManagementService identityManagementService;
+  protected TenantInfoHolder tenantInfoHolder;
   
   public ExecuteSchemaOperationCommand(String schemaOperation) {
     this.schemaOperation = schemaOperation;

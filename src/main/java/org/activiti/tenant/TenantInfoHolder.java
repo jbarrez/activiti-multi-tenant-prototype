@@ -18,7 +18,7 @@ import java.util.Collection;
 /**
  * @author Joram Barrez
  */
-public interface IdentityManagementService {
+public interface TenantInfoHolder {
   
   Collection<String> getAllTenants();
   

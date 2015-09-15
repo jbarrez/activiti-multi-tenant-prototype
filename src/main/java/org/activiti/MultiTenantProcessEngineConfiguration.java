@@ -30,7 +30,7 @@ import org.activiti.engine.impl.interceptor.CommandInterceptor;
 import org.activiti.engine.impl.persistence.StrongUuidGenerator;
 import org.activiti.engine.impl.util.IoUtil;
 import org.activiti.impl.db.ExecuteSchemaOperationCommand;
-import org.activiti.tenant.IdentityManagementService;
+import org.activiti.tenant.TenantInfoHolder;
 import org.apache.commons.lang3.ObjectUtils;
 import org.apache.ibatis.mapping.Environment;
 import org.apache.ibatis.session.Configuration;
@@ -44,7 +44,7 @@ public class MultiTenantProcessEngineConfiguration extends ProcessEngineConfigur
   
   private static final Logger logger = LoggerFactory.getLogger(MultiTenantProcessEngineConfiguration.class);
   
-  protected IdentityManagementService identityManagementService;
+  protected TenantInfoHolder tenantInfoHolder;
   
   protected String multiTenantDatabaseSchemaUpdate;
   
@@ -81,7 +81,7 @@ public class MultiTenantProcessEngineConfiguration extends ProcessEngineConfigur
   
   @Override
   protected DbSqlSessionFactory createDbSqlSessionFactory() {
-    multiTenantDbSqlSessionFactory = new MultiTenantDbSqlSessionFactory(identityManagementService);
+    multiTenantDbSqlSessionFactory = new MultiTenantDbSqlSessionFactory(tenantInfoHolder);
     for(MultiTenantDataSourceConfiguration dataSourceConfig : dataSourceConfigurations) {
       multiTenantDbSqlSessionFactory.addDatabaseType(dataSourceConfig.getTenantId(), dataSourceConfig.getDatabaseType());
     }
@@ -91,10 +91,10 @@ public class MultiTenantProcessEngineConfiguration extends ProcessEngineConfigur
   @Override
   protected void initSqlSessionFactory() {
     
-    MultiTenantSqlSessionFactory multiTenantSqlSessionFactory = new MultiTenantSqlSessionFactory(identityManagementService);
+    MultiTenantSqlSessionFactory multiTenantSqlSessionFactory = new MultiTenantSqlSessionFactory(tenantInfoHolder);
     this.sqlSessionFactory = multiTenantSqlSessionFactory;
     
-    for (String tenantId : identityManagementService.getAllTenants()) {
+    for (String tenantId : tenantInfoHolder.getAllTenants()) {
       initSqlSessionFactoryForTenant(multiTenantSqlSessionFactory, tenantId);
     }
   }
@@ -102,10 +102,13 @@ public class MultiTenantProcessEngineConfiguration extends ProcessEngineConfigur
   protected void initSqlSessionFactoryForTenant(MultiTenantSqlSessionFactory multiTenantSqlSessionFactory, String tenantId) {
     logger.info("Initializing sql session factory for tenant " + tenantId);
      
+    // This could be optimized by a hack: http://www.jorambarrez.be/blog/2014/08/22/seriously-reducing-memory/
+    // For each database type, the Mybatis configuration could be cached and reused.
+    // But not applied it, as it's a quite dirty bit of hacking with relfection.
+    
     InputStream inputStream = null;
     try {
       inputStream = getMyBatisXmlConfigurationStream();
-
       DataSource dataSource = datasources.get(tenantId);
       
       MultiTenantDataSourceConfiguration dataSourceConfiguration = null;
@@ -151,17 +154,17 @@ public class MultiTenantProcessEngineConfiguration extends ProcessEngineConfigur
     
     ProcessEngine processEngine = super.buildProcessEngine();
     
-    for (String tenantId : identityManagementService.getAllTenants()) {
+    for (String tenantId : tenantInfoHolder.getAllTenants()) {
       createTenantSchema(tenantId);
     }
-    identityManagementService.clearCurrentTenantId();
+    tenantInfoHolder.clearCurrentTenantId();
     
     return processEngine;
   }
 
   protected void createTenantSchema(String tenantId) {
     logger.info("creating/validating database schema for tenant " + tenantId);
-    identityManagementService.setCurrentTenantId(tenantId);
+    tenantInfoHolder.setCurrentTenantId(tenantId);
     getCommandExecutor().execute(getSchemaCommandConfig(), new ExecuteSchemaOperationCommand(multiTenantDatabaseSchemaUpdate));
   }
   
@@ -186,16 +189,16 @@ public class MultiTenantProcessEngineConfiguration extends ProcessEngineConfigur
   
   // Getters and Setters ////////////////////////////////////////////////////////////////////////
   
-  public IdentityManagementService getIdentityManagementService() {
-    return identityManagementService;
-  }
-
-  public void setIdentityManagementService(IdentityManagementService identityManagementService) {
-    this.identityManagementService = identityManagementService;
-  }
-
   public List<MultiTenantDataSourceConfiguration> getDataSourceConfigurations() {
     return dataSourceConfigurations;
+  }
+
+  public TenantInfoHolder getTenantInfoHolder() {
+    return tenantInfoHolder;
+  }
+
+  public void setTenantInfoHolder(TenantInfoHolder tenantInfoHolder) {
+    this.tenantInfoHolder = tenantInfoHolder;
   }
 
   public void setDataSourceConfigurations(List<MultiTenantDataSourceConfiguration> dataSourceConfigurations) {

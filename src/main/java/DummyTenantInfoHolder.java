@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.activiti.engine.impl.identity.Authentication;
-import org.activiti.tenant.IdentityManagementService;
+import org.activiti.tenant.TenantInfoHolder;
 
 /* Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ import org.activiti.tenant.IdentityManagementService;
 /**
  * @author Joram Barrez
  */
-public class DummyIdentityManagementService implements IdentityManagementService {
+public class DummyTenantInfoHolder implements TenantInfoHolder {
   
   protected Map<String, List<String>> tenantToUserMapping = new HashMap<String, List<String>>();
   protected Map<String, String> userToTenantMapping = new HashMap<String, String>();
