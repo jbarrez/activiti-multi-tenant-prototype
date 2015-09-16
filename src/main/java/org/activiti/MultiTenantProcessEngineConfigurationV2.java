@@ -16,10 +16,13 @@ import javax.sql.DataSource;
 
 import org.activiti.datasource.TenantAwareDataSource;
 import org.activiti.engine.ProcessEngine;
+import org.activiti.engine.impl.asyncexecutor.AsyncExecutor;
 import org.activiti.engine.impl.cfg.ProcessEngineConfigurationImpl;
 import org.activiti.engine.impl.interceptor.CommandInterceptor;
 import org.activiti.engine.impl.persistence.StrongUuidGenerator;
 import org.activiti.impl.db.ExecuteSchemaOperationCommand;
+import org.activiti.job.TenantAwareAsyncExecutor;
+import org.activiti.job.TenantAwareAyncExecutorFactory;
 import org.activiti.tenant.TenantInfoHolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,8 +35,8 @@ public class MultiTenantProcessEngineConfigurationV2 extends ProcessEngineConfig
   private static final Logger logger = LoggerFactory.getLogger(MultiTenantProcessEngineConfigurationV2.class);
   
   protected TenantInfoHolder tenantInfoHolder;
-  protected TenantAwareDataSource tenantAwareDataSource;
   protected String multiTenantDatabaseSchemaUpdate;
+  protected TenantAwareAyncExecutorFactory tenantAwareAyncExecutorFactory;
   protected boolean booted;
   
   public MultiTenantProcessEngineConfigurationV2(TenantInfoHolder tenantInfoHolder) {
@@ -44,21 +47,19 @@ public class MultiTenantProcessEngineConfigurationV2 extends ProcessEngineConfig
     // a database table. Which is impossible with a mult-database-schema setup.
     this.idGenerator = new StrongUuidGenerator();
     
-    // TODO: what about the job executor?
-    this.setAsyncExecutorActivate(false);
-    this.setAsyncExecutorEnabled(false);
-    this.setJobExecutorActivate(false);
-    
-    this.tenantAwareDataSource = new TenantAwareDataSource(tenantInfoHolder);
-    this.dataSource = tenantAwareDataSource;
-    
+    this.dataSource = new TenantAwareDataSource(tenantInfoHolder);
+    this.asyncExecutor = new TenantAwareAsyncExecutor(tenantInfoHolder);
   }
   
-  public void registerDataSource(String tenantId, DataSource dataSource) {
-    tenantAwareDataSource.addDataSource(tenantId, dataSource);
+  public void registerTenant(String tenantId, DataSource dataSource) {
+    ((TenantAwareDataSource) super.getDataSource()).addDataSource(tenantId, dataSource);
     
     if (booted) {
       createTenantSchema(tenantId);
+      
+      if (isAsyncExecutorEnabled()) {
+        createTenantAsyncJobExecutor(tenantId);
+      }
     }
   }
   
@@ -87,9 +88,24 @@ public class MultiTenantProcessEngineConfigurationV2 extends ProcessEngineConfig
     getCommandExecutor().execute(getSchemaCommandConfig(), new ExecuteSchemaOperationCommand(multiTenantDatabaseSchemaUpdate));
   }
   
+  protected void createTenantAsyncJobExecutor(String tenantId) {
+    AsyncExecutor tenantAsyncExecutor = ((TenantAwareAsyncExecutor) asyncExecutor).addTenantAsyncExecutor(tenantId);
+    if (isAsyncExecutorActivate()) {
+      tenantAsyncExecutor.start();
+    }
+  }
+  
   @Override
   protected CommandInterceptor createTransactionInterceptor() {
     return null;
+  }
+
+  public TenantAwareAyncExecutorFactory getTenantAwareAyncExecutorFactory() {
+    return tenantAwareAyncExecutorFactory;
+  }
+
+  public void setTenantAwareAyncExecutorFactory(TenantAwareAyncExecutorFactory tenantAwareAyncExecutorFactory) {
+    this.tenantAwareAyncExecutorFactory = tenantAwareAyncExecutorFactory;
   }
   
 }

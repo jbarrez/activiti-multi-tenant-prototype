@@ -11,6 +11,7 @@
  * limitations under the License.
  */
 
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -36,7 +37,9 @@ public class Main2 {
 
   private static TenantInfoHolder identityManagementService;
   
-  public static void main(String[] args) {
+  public static void main(String[] args) throws Exception {
+    
+    org.h2.tools.Server.createWebServer("-web").start();
     
     DummyTenantInfoHolder tenantInfoHolder = new DummyTenantInfoHolder();
     
@@ -57,13 +60,16 @@ public class Main2 {
     // Booting up the Activiti Engine
     
     MultiTenantProcessEngineConfigurationV2 config = new MultiTenantProcessEngineConfigurationV2(tenantInfoHolder);
-    
+
     config.setDatabaseType(MultiTenantProcessEngineConfigurationV2.DATABASE_TYPE_H2);
     config.setDatabaseSchemaUpdate(MultiTenantProcessEngineConfigurationV2.DB_SCHEMA_UPDATE_DROP_CREATE);
     
-    config.registerDataSource("alfresco", createDataSource("jdbc:h2:mem:activiti-alfresco;DB_CLOSE_DELAY=1000", "sa", ""));
-    config.registerDataSource("acme", createDataSource("jdbc:h2:mem:activiti-acme;DB_CLOSE_DELAY=1000", "sa", ""));
-    config.registerDataSource("starkindustries", createDataSource("jdbc:h2:mem:activiti-stark;DB_CLOSE_DELAY=1000", "sa", ""));
+    config.setAsyncExecutorEnabled(true);
+    config.setAsyncExecutorActivate(true);
+    
+    config.registerTenant("alfresco", createDataSource("jdbc:h2:mem:activiti-alfresco;DB_CLOSE_DELAY=1000", "sa", ""));
+    config.registerTenant("acme", createDataSource("jdbc:h2:mem:activiti-acme;DB_CLOSE_DELAY=1000", "sa", ""));
+    config.registerTenant("starkindustries", createDataSource("jdbc:h2:mem:activiti-stark;DB_CLOSE_DELAY=1000", "sa", ""));
     
     identityManagementService = tenantInfoHolder;
     
@@ -71,26 +77,32 @@ public class Main2 {
     
     // Starting process instances for a few tenants
     
-    startProcessInstance("joram");
-    startProcessInstance("joram");
-    startProcessInstance("joram");
-    startProcessInstance("raphael");
-    startProcessInstance("raphael");
-    startProcessInstance("tony");
+    startProcessInstances("joram");
+    startProcessInstances("joram");
+    startProcessInstances("joram");
+    startProcessInstances("raphael");
+    startProcessInstances("raphael");
+    startProcessInstances("tony");
     
     // Adding a new tenant
     tenantInfoHolder.addTenant("dailyplanet");
     tenantInfoHolder.addUser("dailyplanet", "louis");
     tenantInfoHolder.addUser("dailyplanet", "clark");
     
-    config.registerDataSource("dailyplanet", createDataSource("jdbc:h2:mem:activiti-daily;DB_CLOSE_DELAY=1000", "sa", ""));
+    config.registerTenant("dailyplanet", createDataSource("jdbc:h2:mem:activiti-daily;DB_CLOSE_DELAY=1000", "sa", ""));
     
     // Start process instance with new tenant
-    startProcessInstance("clark");
-    startProcessInstance("clark");
+    startProcessInstances("clark");
+    startProcessInstances("clark");
+    
+    // Move the clock 2 hours (jobs fire in one hour)
+    config.getClock().setCurrentTime(new Date(config.getClock().getCurrentTime().getTime() + (2 * 60 * 60 * 1000)));
+    
+    processEngine.close();
     
     System.out.println();
     System.out.println("ALL DONE");
+    System.exit(0); // Otherwise hikari won't go down. Needs a manual shutdown() or close() ...
   }
   
   private static DataSource createDataSource(String jdbcUrl, String jdbcUsername, String jdbcPassword) {
@@ -104,14 +116,17 @@ public class Main2 {
     return new HikariDataSource(config);
   }
 
-  private static void startProcessInstance(String userId) {
+  private static void startProcessInstances(String userId) {
     
     System.out.println();
     System.out.println("Starting process instance for user " + userId);
     
     identityManagementService.setCurrentUserId(userId);
     
-    Deployment deployment = processEngine.getRepositoryService().createDeployment().addClasspathResource("oneTaskProcess.bpmn20.xml").deploy();
+    Deployment deployment = processEngine.getRepositoryService().createDeployment()
+          .addClasspathResource("oneTaskProcess.bpmn20.xml")
+          .addClasspathResource("jobTest.bpmn20.xml")
+          .deploy();
     System.out.println("Process deployed! Deployment id is " + deployment.getId());
     
     Map<String, Object> vars = new HashMap<String, Object>();
@@ -130,6 +145,9 @@ public class Main2 {
     System.out.println("Got " + tasks.size() + " tasks");
     
     System.out.println("Got " + processEngine.getHistoryService().createHistoricProcessInstanceQuery().count() + " process instances in the system");
+    
+    // Start a Job
+    processEngine.getRuntimeService().startProcessInstanceByKey("jobTest");
   }
   
 }
