@@ -10,28 +10,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.activiti.job;
+package org.activiti.multitenant.job;
 
-import org.activiti.engine.impl.asyncexecutor.AcquireTimerJobsRunnable;
+import org.activiti.engine.impl.asyncexecutor.AcquireAsyncJobsDueRunnable;
 import org.activiti.engine.impl.asyncexecutor.AsyncExecutor;
 import org.activiti.tenant.TenantInfoHolder;
 
 /**
  * @author Joram Barrez
  */
-public class TenantAwareAcquireTimerJobsRunnable extends AcquireTimerJobsRunnable {
+public class TenantAwareAcquireAsyncJobsDueRunnable extends AcquireAsyncJobsDueRunnable {
 
   protected TenantInfoHolder tenantInfoHolder;
   protected String tenantId;
   
-  public TenantAwareAcquireTimerJobsRunnable(AsyncExecutor asyncExecutor, TenantInfoHolder tenantInfoHolder, String tenantId) {
+  public TenantAwareAcquireAsyncJobsDueRunnable(AsyncExecutor asyncExecutor, TenantInfoHolder tenantInfoHolder, String tenantId) {
     super(asyncExecutor);
     this.tenantInfoHolder = tenantInfoHolder;
     this.tenantId = tenantId;
   }
   
-  protected TenantAwareAsyncExecutor getTenantAwareAsyncExecutor() {
-    return (TenantAwareAsyncExecutor) asyncExecutor;
+  protected ExecutorPerTenantAsyncExecutor getTenantAwareAsyncExecutor() {
+    return (ExecutorPerTenantAsyncExecutor) asyncExecutor;
   }
   
   @Override

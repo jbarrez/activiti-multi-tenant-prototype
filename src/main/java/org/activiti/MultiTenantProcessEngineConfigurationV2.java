@@ -16,13 +16,13 @@ import javax.sql.DataSource;
 
 import org.activiti.datasource.TenantAwareDataSource;
 import org.activiti.engine.ProcessEngine;
-import org.activiti.engine.impl.asyncexecutor.AsyncExecutor;
 import org.activiti.engine.impl.cfg.ProcessEngineConfigurationImpl;
 import org.activiti.engine.impl.interceptor.CommandInterceptor;
 import org.activiti.engine.impl.persistence.StrongUuidGenerator;
 import org.activiti.impl.db.ExecuteSchemaOperationCommand;
-import org.activiti.job.TenantAwareAsyncExecutor;
-import org.activiti.job.TenantAwareAyncExecutorFactory;
+import org.activiti.multitenant.job.ExecutorPerTenantAsyncExecutor;
+import org.activiti.multitenant.job.TenantAwareAsyncExecutor;
+import org.activiti.multitenant.job.TenantAwareAsyncExecutorFactory;
 import org.activiti.tenant.TenantInfoHolder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,8 +35,7 @@ public class MultiTenantProcessEngineConfigurationV2 extends ProcessEngineConfig
   private static final Logger logger = LoggerFactory.getLogger(MultiTenantProcessEngineConfigurationV2.class);
   
   protected TenantInfoHolder tenantInfoHolder;
-  protected String multiTenantDatabaseSchemaUpdate;
-  protected TenantAwareAyncExecutorFactory tenantAwareAyncExecutorFactory;
+  protected TenantAwareAsyncExecutorFactory tenantAwareAyncExecutorFactory;
   protected boolean booted;
   
   public MultiTenantProcessEngineConfigurationV2(TenantInfoHolder tenantInfoHolder) {
@@ -45,10 +44,12 @@ public class MultiTenantProcessEngineConfigurationV2 extends ProcessEngineConfig
     
     // Using the UUID generator, as otherwise the ids are pulled from a global pool of ids, backed by
     // a database table. Which is impossible with a mult-database-schema setup.
+    
+    // Also: it avoids the need for having a process definition cache for each tenant
+    
     this.idGenerator = new StrongUuidGenerator();
     
     this.dataSource = new TenantAwareDataSource(tenantInfoHolder);
-    this.asyncExecutor = new TenantAwareAsyncExecutor(tenantInfoHolder);
   }
   
   public void registerTenant(String tenantId, DataSource dataSource) {
@@ -64,19 +65,48 @@ public class MultiTenantProcessEngineConfigurationV2 extends ProcessEngineConfig
   }
   
   @Override
+  protected void initAsyncExecutor() {
+    
+    if (asyncExecutor == null) {
+      asyncExecutor = new ExecutorPerTenantAsyncExecutor(tenantInfoHolder);
+    }
+    
+    super.initAsyncExecutor();
+    
+    if (asyncExecutor instanceof TenantAwareAsyncExecutor) {
+      for (String tenantId : tenantInfoHolder.getAllTenants()) {
+        ((TenantAwareAsyncExecutor) asyncExecutor).addTenantAsyncExecutor(tenantId, false); // false -> will be started later with all the other executors
+      }
+    }
+  }
+  
+  @Override
   public ProcessEngine buildProcessEngine() {
     
     // Disable schema creation/validation by setting it to null.
     // We'll do it manually, see buildProcessEngine() method (hence why it's copied first)
-    this.multiTenantDatabaseSchemaUpdate = this.databaseSchemaUpdate;
+    String originalDatabaseSchemaUpdate = this.databaseSchemaUpdate;
     this.databaseSchemaUpdate = null; 
+    
+    // Also, we shouldn't start the async executor until *after* the schema's have been created
+    boolean originalIsAutoActivateAsyncExecutor = this.asyncExecutorActivate;
+    this.asyncExecutorActivate = false;
     
     ProcessEngine processEngine = super.buildProcessEngine();
     
+    // Reset to original values
+    this.databaseSchemaUpdate = originalDatabaseSchemaUpdate;
+    this.asyncExecutorActivate = originalIsAutoActivateAsyncExecutor;
+    
+    // Create tenant schema
     for (String tenantId : tenantInfoHolder.getAllTenants()) {
       createTenantSchema(tenantId);
     }
-    tenantInfoHolder.clearCurrentTenantId();
+    
+    // Start async executor
+    if (asyncExecutor != null && originalIsAutoActivateAsyncExecutor) {
+      asyncExecutor.start();
+    }
     
     booted = true;
     return processEngine;
@@ -85,14 +115,12 @@ public class MultiTenantProcessEngineConfigurationV2 extends ProcessEngineConfig
   protected void createTenantSchema(String tenantId) {
     logger.info("creating/validating database schema for tenant " + tenantId);
     tenantInfoHolder.setCurrentTenantId(tenantId);
-    getCommandExecutor().execute(getSchemaCommandConfig(), new ExecuteSchemaOperationCommand(multiTenantDatabaseSchemaUpdate));
+    getCommandExecutor().execute(getSchemaCommandConfig(), new ExecuteSchemaOperationCommand(databaseSchemaUpdate));
+    tenantInfoHolder.clearCurrentTenantId();
   }
   
   protected void createTenantAsyncJobExecutor(String tenantId) {
-    AsyncExecutor tenantAsyncExecutor = ((TenantAwareAsyncExecutor) asyncExecutor).addTenantAsyncExecutor(tenantId);
-    if (isAsyncExecutorActivate()) {
-      tenantAsyncExecutor.start();
-    }
+    ((TenantAwareAsyncExecutor) asyncExecutor).addTenantAsyncExecutor(tenantId, isAsyncExecutorActivate() && booted);
   }
   
   @Override
@@ -100,11 +128,11 @@ public class MultiTenantProcessEngineConfigurationV2 extends ProcessEngineConfig
     return null;
   }
 
-  public TenantAwareAyncExecutorFactory getTenantAwareAyncExecutorFactory() {
+  public TenantAwareAsyncExecutorFactory getTenantAwareAyncExecutorFactory() {
     return tenantAwareAyncExecutorFactory;
   }
 
-  public void setTenantAwareAyncExecutorFactory(TenantAwareAyncExecutorFactory tenantAwareAyncExecutorFactory) {
+  public void setTenantAwareAyncExecutorFactory(TenantAwareAsyncExecutorFactory tenantAwareAyncExecutorFactory) {
     this.tenantAwareAyncExecutorFactory = tenantAwareAyncExecutorFactory;
   }
   

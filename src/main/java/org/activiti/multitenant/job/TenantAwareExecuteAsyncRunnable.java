@@ -10,32 +10,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.activiti.job;
 
-import org.activiti.engine.impl.asyncexecutor.AcquireAsyncJobsDueRunnable;
-import org.activiti.engine.impl.asyncexecutor.AsyncExecutor;
+package org.activiti.multitenant.job;
+
+import org.activiti.engine.impl.asyncexecutor.ExecuteAsyncRunnable;
+import org.activiti.engine.impl.interceptor.CommandExecutor;
+import org.activiti.engine.impl.persistence.entity.JobEntity;
 import org.activiti.tenant.TenantInfoHolder;
 
 /**
  * @author Joram Barrez
  */
-public class TenantAwareAcquireAsyncJobsDueRunnable extends AcquireAsyncJobsDueRunnable {
-
+public class TenantAwareExecuteAsyncRunnable extends ExecuteAsyncRunnable {
+  
   protected TenantInfoHolder tenantInfoHolder;
   protected String tenantId;
   
-  public TenantAwareAcquireAsyncJobsDueRunnable(AsyncExecutor asyncExecutor, TenantInfoHolder tenantInfoHolder, String tenantId) {
-    super(asyncExecutor);
+  public TenantAwareExecuteAsyncRunnable(JobEntity job, CommandExecutor commandExecutor, TenantInfoHolder tenantInfoHolder, String tenantId) {
+    super(job, commandExecutor);
     this.tenantInfoHolder = tenantInfoHolder;
     this.tenantId = tenantId;
   }
-  
-  protected TenantAwareAsyncExecutor getTenantAwareAsyncExecutor() {
-    return (TenantAwareAsyncExecutor) asyncExecutor;
-  }
-  
+
   @Override
-  public synchronized void run() {
+  public void run() {
     tenantInfoHolder.setCurrentTenantId(tenantId);
     super.run();
     tenantInfoHolder.clearCurrentTenantId();

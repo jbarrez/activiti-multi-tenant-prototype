@@ -10,28 +10,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.activiti.multitenant.job;
 
-package org.activiti.job;
-
-import org.activiti.engine.impl.asyncexecutor.DefaultAsyncJobExecutor;
+import org.activiti.engine.impl.asyncexecutor.AsyncExecutor;
 
 /**
  * @author Joram Barrez
  */
-public class TenantAwareDefaultAsyncJobExecutor extends DefaultAsyncJobExecutor {
-  
-  protected String tenantId;
-  
-  public TenantAwareDefaultAsyncJobExecutor(String tenantId) {
-    this.tenantId = tenantId;
-  }
+public interface TenantAwareAsyncExecutorFactory {
 
-  public String getTenantId() {
-    return tenantId;
-  }
+  /**
+   * Allows to create an {@link AsyncExecutor} specifically for a tenant. 
+   */
+  AsyncExecutor createAsyncExecutor(String tenantId);
 
-  public void setTenantId(String tenantId) {
-    this.tenantId = tenantId;
-  }
-  
 }

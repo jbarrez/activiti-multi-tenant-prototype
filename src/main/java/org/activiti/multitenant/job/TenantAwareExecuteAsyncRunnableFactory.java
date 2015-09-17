@@ -11,9 +11,9 @@
  * limitations under the License.
  */
 
-package org.activiti.job;
+package org.activiti.multitenant.job;
 
-import org.activiti.engine.impl.asyncexecutor.ExecuteAsyncRunnable;
+import org.activiti.engine.impl.asyncexecutor.ExecuteAsyncRunnableFactory;
 import org.activiti.engine.impl.interceptor.CommandExecutor;
 import org.activiti.engine.impl.persistence.entity.JobEntity;
 import org.activiti.tenant.TenantInfoHolder;
@@ -21,22 +21,18 @@ import org.activiti.tenant.TenantInfoHolder;
 /**
  * @author Joram Barrez
  */
-public class TenantAwareExecuteAsyncRunnable extends ExecuteAsyncRunnable {
+public class TenantAwareExecuteAsyncRunnableFactory implements ExecuteAsyncRunnableFactory {
   
   protected TenantInfoHolder tenantInfoHolder;
   protected String tenantId;
   
-  public TenantAwareExecuteAsyncRunnable(JobEntity job, CommandExecutor commandExecutor, TenantInfoHolder tenantInfoHolder, String tenantId) {
-    super(job, commandExecutor);
+  public TenantAwareExecuteAsyncRunnableFactory(TenantInfoHolder tenantInfoHolder, String tenantId) {
     this.tenantInfoHolder = tenantInfoHolder;
     this.tenantId = tenantId;
   }
 
-  @Override
-  public void run() {
-    tenantInfoHolder.setCurrentTenantId(tenantId);
-    super.run();
-    tenantInfoHolder.clearCurrentTenantId();
+  public Runnable createExecuteAsyncRunnable(JobEntity jobEntity, CommandExecutor commandExecutor) {
+    return new TenantAwareExecuteAsyncRunnable(jobEntity, commandExecutor, tenantInfoHolder, tenantId);
   }
 
 }

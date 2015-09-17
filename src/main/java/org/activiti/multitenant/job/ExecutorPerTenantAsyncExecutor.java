@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package org.activiti.job;
+package org.activiti.multitenant.job;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -25,14 +25,17 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
+ * An {@link AsyncExecutor} that has one {@link AsyncExecutor} per tenant.
+ * So each tenant has its own acquiring threads and it's own threadpool for executing jobs.
+ * 
  * @author Joram Barrez
  */
-public class TenantAwareAsyncExecutor implements AsyncExecutor {
+public class ExecutorPerTenantAsyncExecutor implements TenantAwareAsyncExecutor {
   
-  private static final Logger logger = LoggerFactory.getLogger(TenantAwareAsyncExecutor.class);
+  private static final Logger logger = LoggerFactory.getLogger(ExecutorPerTenantAsyncExecutor.class);
   
   protected TenantInfoHolder tenantInfoHolder;
-  protected TenantAwareAyncExecutorFactory tenantAwareAyncExecutorFactory;
+  protected TenantAwareAsyncExecutorFactory tenantAwareAyncExecutorFactory;
   
   protected Map<String, AsyncExecutor> tenantExecutors = new HashMap<String, AsyncExecutor>();
   
@@ -40,20 +43,16 @@ public class TenantAwareAsyncExecutor implements AsyncExecutor {
   protected boolean active;
   protected boolean autoActivate;
   
-  public TenantAwareAsyncExecutor(TenantInfoHolder tenantInfoHolder) {
+  public ExecutorPerTenantAsyncExecutor(TenantInfoHolder tenantInfoHolder) {
     this(tenantInfoHolder, null);
   }
   
-  public TenantAwareAsyncExecutor(TenantInfoHolder tenantInfoHolder, TenantAwareAyncExecutorFactory tenantAwareAyncExecutorFactory) {
+  public ExecutorPerTenantAsyncExecutor(TenantInfoHolder tenantInfoHolder, TenantAwareAsyncExecutorFactory tenantAwareAyncExecutorFactory) {
     this.tenantInfoHolder = tenantInfoHolder;
     this.tenantAwareAyncExecutorFactory = tenantAwareAyncExecutorFactory;
-    
-    for (String tenantId : tenantInfoHolder.getAllTenants()) {
-      addTenantAsyncExecutor(tenantId);
-    }
   }
 
-  public AsyncExecutor addTenantAsyncExecutor(String tenantId) {
+  public void addTenantAsyncExecutor(String tenantId, boolean startExecutor) {
     AsyncExecutor tenantExecutor = null;
     
     if (tenantAwareAyncExecutorFactory == null) {
@@ -73,7 +72,9 @@ public class TenantAwareAsyncExecutor implements AsyncExecutor {
     
     tenantExecutors.put(tenantId, tenantExecutor);
     
-    return tenantExecutor;
+    if (startExecutor) {
+      tenantExecutor.start();
+    }
   }
   
   protected AsyncExecutor determineAsyncExecutor() {

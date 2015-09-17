@@ -23,6 +23,8 @@ import org.activiti.engine.ProcessEngine;
 import org.activiti.engine.repository.Deployment;
 import org.activiti.engine.runtime.ProcessInstance;
 import org.activiti.engine.task.Task;
+import org.activiti.multitenant.job.ExecutorPerTenantAsyncExecutor;
+import org.activiti.multitenant.job.SharedExecutorServiceAsyncExecutor;
 import org.activiti.tenant.TenantInfoHolder;
 
 import com.zaxxer.hikari.HikariConfig;
@@ -66,6 +68,9 @@ public class Main2 {
     
     config.setAsyncExecutorEnabled(true);
     config.setAsyncExecutorActivate(true);
+    
+//    config.setAsyncExecutor(new ExecutorPerTenantAsyncExecutor(tenantInfoHolder));
+    config.setAsyncExecutor(new SharedExecutorServiceAsyncExecutor(tenantInfoHolder));
     
     config.registerTenant("alfresco", createDataSource("jdbc:h2:mem:activiti-alfresco;DB_CLOSE_DELAY=1000", "sa", ""));
     config.registerTenant("acme", createDataSource("jdbc:h2:mem:activiti-acme;DB_CLOSE_DELAY=1000", "sa", ""));
