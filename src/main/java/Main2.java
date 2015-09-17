@@ -19,7 +19,7 @@ import java.util.Map;
 import javax.sql.DataSource;
 
 import org.activiti.DummyTenantInfoHolder;
-import org.activiti.MultiTenantProcessEngineConfigurationV2;
+import org.activiti.MultiTenantProcessEngineConfiguration;
 import org.activiti.engine.ProcessEngine;
 import org.activiti.engine.repository.Deployment;
 import org.activiti.engine.runtime.ProcessInstance;
@@ -61,10 +61,10 @@ public class Main2 {
     
     // Booting up the Activiti Engine
     
-    MultiTenantProcessEngineConfigurationV2 config = new MultiTenantProcessEngineConfigurationV2(myTenantInfoHolder);
+    MultiTenantProcessEngineConfiguration config = new MultiTenantProcessEngineConfiguration(myTenantInfoHolder);
 
-    config.setDatabaseType(MultiTenantProcessEngineConfigurationV2.DATABASE_TYPE_H2);
-    config.setDatabaseSchemaUpdate(MultiTenantProcessEngineConfigurationV2.DB_SCHEMA_UPDATE_DROP_CREATE);
+    config.setDatabaseType(MultiTenantProcessEngineConfiguration.DATABASE_TYPE_H2);
+    config.setDatabaseSchemaUpdate(MultiTenantProcessEngineConfiguration.DB_SCHEMA_UPDATE_DROP_CREATE);
     
     config.setAsyncExecutorEnabled(true);
     config.setAsyncExecutorActivate(true);

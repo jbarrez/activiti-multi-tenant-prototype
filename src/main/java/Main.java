@@ -18,7 +18,7 @@ import java.util.Map;
 
 import org.activiti.DummyTenantInfoHolder;
 import org.activiti.MultiTenantDataSourceConfiguration;
-import org.activiti.MultiTenantProcessEngineConfiguration;
+import org.activiti.DeprecateMultiTenantProcessEngineConfiguration;
 import org.activiti.MybatisMultiTenantDatasourceConfiguration;
 import org.activiti.engine.ProcessEngine;
 import org.activiti.engine.impl.cfg.ProcessEngineConfigurationImpl;
@@ -56,9 +56,9 @@ public class Main {
     
     // Booting up the Activiti Engine
     
-    MultiTenantProcessEngineConfiguration config = new MultiTenantProcessEngineConfiguration();
+    DeprecateMultiTenantProcessEngineConfiguration config = new DeprecateMultiTenantProcessEngineConfiguration();
     
-    config.setDatabaseSchemaUpdate(MultiTenantProcessEngineConfiguration.DB_SCHEMA_UPDATE_DROP_CREATE);
+    config.setDatabaseSchemaUpdate(DeprecateMultiTenantProcessEngineConfiguration.DB_SCHEMA_UPDATE_DROP_CREATE);
     
     List<MultiTenantDataSourceConfiguration> datasourceConfigurations = new ArrayList<MultiTenantDataSourceConfiguration>();
     datasourceConfigurations.add(new MybatisMultiTenantDatasourceConfiguration("alfresco", 

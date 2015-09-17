@@ -40,7 +40,7 @@ import com.zaxxer.hikari.HikariDataSource;
 public class MultiTenantProcessEngineTest {
   
   private DummyTenantInfoHolder tenantInfoHolder;
-  private MultiTenantProcessEngineConfigurationV2 config;
+  private MultiTenantProcessEngineConfiguration config;
   private ProcessEngine processEngine;
   
   @BeforeClass
@@ -79,10 +79,10 @@ public class MultiTenantProcessEngineTest {
   }
   
   private void setupProcessEngine() {
-    config = new MultiTenantProcessEngineConfigurationV2(tenantInfoHolder);
+    config = new MultiTenantProcessEngineConfiguration(tenantInfoHolder);
 
-    config.setDatabaseType(MultiTenantProcessEngineConfigurationV2.DATABASE_TYPE_H2);
-    config.setDatabaseSchemaUpdate(MultiTenantProcessEngineConfigurationV2.DB_SCHEMA_UPDATE_DROP_CREATE);
+    config.setDatabaseType(MultiTenantProcessEngineConfiguration.DATABASE_TYPE_H2);
+    config.setDatabaseSchemaUpdate(MultiTenantProcessEngineConfiguration.DB_SCHEMA_UPDATE_DROP_CREATE);
     
     config.setAsyncExecutorEnabled(true);
     config.setAsyncExecutorActivate(true);

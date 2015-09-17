@@ -12,28 +12,18 @@
  */
 package org.activiti;
 
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.Reader;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-
 import javax.sql.DataSource;
 
-import org.activiti.engine.ActivitiException;
+import org.activiti.datasource.TenantAwareDataSource;
 import org.activiti.engine.ProcessEngine;
 import org.activiti.engine.impl.cfg.ProcessEngineConfigurationImpl;
-import org.activiti.engine.impl.db.DbSqlSessionFactory;
 import org.activiti.engine.impl.interceptor.CommandInterceptor;
 import org.activiti.engine.impl.persistence.StrongUuidGenerator;
-import org.activiti.engine.impl.util.IoUtil;
 import org.activiti.impl.db.ExecuteSchemaOperationCommand;
+import org.activiti.multitenant.job.ExecutorPerTenantAsyncExecutor;
+import org.activiti.multitenant.job.TenantAwareAsyncExecutor;
+import org.activiti.multitenant.job.TenantAwareAsyncExecutorFactory;
 import org.activiti.tenant.TenantInfoHolder;
-import org.apache.commons.lang3.ObjectUtils;
-import org.apache.ibatis.mapping.Environment;
-import org.apache.ibatis.session.Configuration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,102 +35,48 @@ public class MultiTenantProcessEngineConfiguration extends ProcessEngineConfigur
   private static final Logger logger = LoggerFactory.getLogger(MultiTenantProcessEngineConfiguration.class);
   
   protected TenantInfoHolder tenantInfoHolder;
+  protected TenantAwareAsyncExecutorFactory tenantAwareAyncExecutorFactory;
+  protected boolean booted;
   
-  protected String multiTenantDatabaseSchemaUpdate;
-  
-  protected List<MultiTenantDataSourceConfiguration> dataSourceConfigurations;
-  
-  protected MultiTenantDbSqlSessionFactory multiTenantDbSqlSessionFactory;
-
-  protected Map<String, DataSource> datasources = new HashMap<String, DataSource>();
-
-  public MultiTenantProcessEngineConfiguration() {
+  public MultiTenantProcessEngineConfiguration(TenantInfoHolder tenantInfoHolder) {
+    
+    this.tenantInfoHolder = tenantInfoHolder;
+    
     // Using the UUID generator, as otherwise the ids are pulled from a global pool of ids, backed by
     // a database table. Which is impossible with a mult-database-schema setup.
+    
+    // Also: it avoids the need for having a process definition cache for each tenant
+    
     this.idGenerator = new StrongUuidGenerator();
     
-    // TODO: what about the job executor?
-    this.setAsyncExecutorActivate(false);
-    this.setAsyncExecutorEnabled(false);
-    this.setJobExecutorActivate(false);
-    
+    this.dataSource = new TenantAwareDataSource(tenantInfoHolder);
   }
   
-  @Override
-  protected CommandInterceptor createTransactionInterceptor() {
-    return null;
-  }
-
-  @Override
-  protected void initDataSource() {
-    // Getting the datasources from the config
-    for(MultiTenantDataSourceConfiguration dataSourceConfig : dataSourceConfigurations) {
-      datasources.put(dataSourceConfig.getTenantId(), dataSourceConfig.getDataSource());
-    }
-  }
-  
-  @Override
-  protected DbSqlSessionFactory createDbSqlSessionFactory() {
-    multiTenantDbSqlSessionFactory = new MultiTenantDbSqlSessionFactory(tenantInfoHolder);
-    for(MultiTenantDataSourceConfiguration dataSourceConfig : dataSourceConfigurations) {
-      multiTenantDbSqlSessionFactory.addDatabaseType(dataSourceConfig.getTenantId(), dataSourceConfig.getDatabaseType());
-    }
-    return multiTenantDbSqlSessionFactory;
-  }
-  
-  @Override
-  protected void initSqlSessionFactory() {
+  public void registerTenant(String tenantId, DataSource dataSource) {
+    ((TenantAwareDataSource) super.getDataSource()).addDataSource(tenantId, dataSource);
     
-    MultiTenantSqlSessionFactory multiTenantSqlSessionFactory = new MultiTenantSqlSessionFactory(tenantInfoHolder);
-    this.sqlSessionFactory = multiTenantSqlSessionFactory;
-    
-    for (String tenantId : tenantInfoHolder.getAllTenants()) {
-      initSqlSessionFactoryForTenant(multiTenantSqlSessionFactory, tenantId);
-    }
-  }
-
-  protected void initSqlSessionFactoryForTenant(MultiTenantSqlSessionFactory multiTenantSqlSessionFactory, String tenantId) {
-    logger.info("Initializing sql session factory for tenant " + tenantId);
-     
-    // This could be optimized by a hack: http://www.jorambarrez.be/blog/2014/08/22/seriously-reducing-memory/
-    // For each database type, the Mybatis configuration could be cached and reused.
-    // But not applied it, as it's a quite dirty bit of hacking with relfection.
-    
-    InputStream inputStream = null;
-    try {
-      inputStream = getMyBatisXmlConfigurationStream();
-      DataSource dataSource = datasources.get(tenantId);
+    if (booted) {
+      createTenantSchema(tenantId);
       
-      MultiTenantDataSourceConfiguration dataSourceConfiguration = null;
-      for (MultiTenantDataSourceConfiguration d : dataSourceConfigurations) {
-        if (d.getTenantId().equals(tenantId)) {
-          dataSourceConfiguration = d;
-          break;
-        }
+      if (isAsyncExecutorEnabled()) {
+        createTenantAsyncJobExecutor(tenantId);
       }
-      
-      String databaseType = dataSourceConfiguration.getDatabaseType();
-      
-      Environment environment = new Environment("default", transactionFactory, dataSource);
-      Reader reader = new InputStreamReader(inputStream);
-      Properties properties = new Properties();
-      properties.put("prefix", databaseTablePrefix);
-      if (databaseType != null) {
-        properties.put("limitBefore", DbSqlSessionFactory.databaseSpecificLimitBeforeStatements.get(databaseType));
-        properties.put("limitAfter", DbSqlSessionFactory.databaseSpecificLimitAfterStatements.get(databaseType));
-        properties.put("limitBetween", DbSqlSessionFactory.databaseSpecificLimitBetweenStatements.get(databaseType));
-        properties.put("limitOuterJoinBetween", DbSqlSessionFactory.databaseOuterJoinLimitBetweenStatements.get(databaseType));
-        properties.put("orderBy", DbSqlSessionFactory.databaseSpecificOrderByStatements.get(databaseType));
-        properties.put("limitBeforeNativeQuery", ObjectUtils.toString(DbSqlSessionFactory.databaseSpecificLimitBeforeNativeQueryStatements.get(databaseType)));
+    }
+  }
+  
+  @Override
+  protected void initAsyncExecutor() {
+    
+    if (asyncExecutor == null) {
+      asyncExecutor = new ExecutorPerTenantAsyncExecutor(tenantInfoHolder);
+    }
+    
+    super.initAsyncExecutor();
+    
+    if (asyncExecutor instanceof TenantAwareAsyncExecutor) {
+      for (String tenantId : tenantInfoHolder.getAllTenants()) {
+        ((TenantAwareAsyncExecutor) asyncExecutor).addTenantAsyncExecutor(tenantId, false); // false -> will be started later with all the other executors
       }
-
-      Configuration configuration = initMybatisConfiguration(environment, reader, properties);
-      multiTenantSqlSessionFactory.addConfig(tenantId, configuration);
-      
-    } catch (Exception e) {
-      throw new ActivitiException("Error while building ibatis SqlSessionFactory: " + e.getMessage(), e);
-    } finally {
-      IoUtil.closeSilently(inputStream);
     }
   }
   
@@ -149,60 +85,55 @@ public class MultiTenantProcessEngineConfiguration extends ProcessEngineConfigur
     
     // Disable schema creation/validation by setting it to null.
     // We'll do it manually, see buildProcessEngine() method (hence why it's copied first)
-    this.multiTenantDatabaseSchemaUpdate = this.databaseSchemaUpdate;
+    String originalDatabaseSchemaUpdate = this.databaseSchemaUpdate;
     this.databaseSchemaUpdate = null; 
+    
+    // Also, we shouldn't start the async executor until *after* the schema's have been created
+    boolean originalIsAutoActivateAsyncExecutor = this.asyncExecutorActivate;
+    this.asyncExecutorActivate = false;
     
     ProcessEngine processEngine = super.buildProcessEngine();
     
+    // Reset to original values
+    this.databaseSchemaUpdate = originalDatabaseSchemaUpdate;
+    this.asyncExecutorActivate = originalIsAutoActivateAsyncExecutor;
+    
+    // Create tenant schema
     for (String tenantId : tenantInfoHolder.getAllTenants()) {
       createTenantSchema(tenantId);
     }
-    tenantInfoHolder.clearCurrentTenantId();
     
+    // Start async executor
+    if (asyncExecutor != null && originalIsAutoActivateAsyncExecutor) {
+      asyncExecutor.start();
+    }
+    
+    booted = true;
     return processEngine;
   }
 
   protected void createTenantSchema(String tenantId) {
     logger.info("creating/validating database schema for tenant " + tenantId);
     tenantInfoHolder.setCurrentTenantId(tenantId);
-    getCommandExecutor().execute(getSchemaCommandConfig(), new ExecuteSchemaOperationCommand(multiTenantDatabaseSchemaUpdate));
+    getCommandExecutor().execute(getSchemaCommandConfig(), new ExecuteSchemaOperationCommand(databaseSchemaUpdate));
+    tenantInfoHolder.clearCurrentTenantId();
   }
   
-  public void addMultiTenantDataSourceConfiguration(MultiTenantDataSourceConfiguration dataSourceConfiguration) {
-    
-    String tenantId = dataSourceConfiguration.getTenantId();
-    
-    // Add datasource
-    dataSourceConfigurations.add(dataSourceConfiguration);
-    datasources.put(tenantId, dataSourceConfiguration.getDataSource());
-    
-    // Create session factory for tenant
-    initSqlSessionFactoryForTenant((MultiTenantSqlSessionFactory) sqlSessionFactory, tenantId);
-    
-    // Register with db sql session factory
-    multiTenantDbSqlSessionFactory.addDatabaseType(tenantId, dataSourceConfiguration.getDatabaseType());
-    
-    // Init schema
-    createTenantSchema(tenantId);
+  protected void createTenantAsyncJobExecutor(String tenantId) {
+    ((TenantAwareAsyncExecutor) asyncExecutor).addTenantAsyncExecutor(tenantId, isAsyncExecutorActivate() && booted);
   }
   
+  @Override
+  protected CommandInterceptor createTransactionInterceptor() {
+    return null;
+  }
+
+  public TenantAwareAsyncExecutorFactory getTenantAwareAyncExecutorFactory() {
+    return tenantAwareAyncExecutorFactory;
+  }
+
+  public void setTenantAwareAyncExecutorFactory(TenantAwareAsyncExecutorFactory tenantAwareAyncExecutorFactory) {
+    this.tenantAwareAyncExecutorFactory = tenantAwareAyncExecutorFactory;
+  }
   
-  // Getters and Setters ////////////////////////////////////////////////////////////////////////
-  
-  public List<MultiTenantDataSourceConfiguration> getDataSourceConfigurations() {
-    return dataSourceConfigurations;
-  }
-
-  public TenantInfoHolder getTenantInfoHolder() {
-    return tenantInfoHolder;
-  }
-
-  public void setTenantInfoHolder(TenantInfoHolder tenantInfoHolder) {
-    this.tenantInfoHolder = tenantInfoHolder;
-  }
-
-  public void setDataSourceConfigurations(List<MultiTenantDataSourceConfiguration> dataSourceConfigurations) {
-    this.dataSourceConfigurations = dataSourceConfigurations;
-  }
-
 }
