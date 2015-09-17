@@ -16,6 +16,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.activiti.DummyTenantInfoHolder;
 import org.activiti.MultiTenantDataSourceConfiguration;
 import org.activiti.MultiTenantProcessEngineConfiguration;
 import org.activiti.MybatisMultiTenantDatasourceConfiguration;

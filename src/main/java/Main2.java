@@ -18,12 +18,12 @@ import java.util.Map;
 
 import javax.sql.DataSource;
 
+import org.activiti.DummyTenantInfoHolder;
 import org.activiti.MultiTenantProcessEngineConfigurationV2;
 import org.activiti.engine.ProcessEngine;
 import org.activiti.engine.repository.Deployment;
 import org.activiti.engine.runtime.ProcessInstance;
 import org.activiti.engine.task.Task;
-import org.activiti.multitenant.job.ExecutorPerTenantAsyncExecutor;
 import org.activiti.multitenant.job.SharedExecutorServiceAsyncExecutor;
 import org.activiti.tenant.TenantInfoHolder;
 
@@ -37,31 +37,31 @@ public class Main2 {
   
   private static ProcessEngine processEngine;
 
-  private static TenantInfoHolder identityManagementService;
+  private static TenantInfoHolder tenantInfoHolder;
   
   public static void main(String[] args) throws Exception {
     
     org.h2.tools.Server.createWebServer("-web").start();
     
-    DummyTenantInfoHolder tenantInfoHolder = new DummyTenantInfoHolder();
+    DummyTenantInfoHolder myTenantInfoHolder = new DummyTenantInfoHolder();
     
-    tenantInfoHolder.addTenant("alfresco");
-    tenantInfoHolder.addUser("alfresco", "joram");
-    tenantInfoHolder.addUser("alfresco", "tijs");
-    tenantInfoHolder.addUser("alfresco", "paul");
-    tenantInfoHolder.addUser("alfresco", "yvo");
+    myTenantInfoHolder.addTenant("alfresco");
+    myTenantInfoHolder.addUser("alfresco", "joram");
+    myTenantInfoHolder.addUser("alfresco", "tijs");
+    myTenantInfoHolder.addUser("alfresco", "paul");
+    myTenantInfoHolder.addUser("alfresco", "yvo");
     
-    tenantInfoHolder.addTenant("acme");
-    tenantInfoHolder.addUser("acme", "raphael");
-    tenantInfoHolder.addUser("acme", "john");
+    myTenantInfoHolder.addTenant("acme");
+    myTenantInfoHolder.addUser("acme", "raphael");
+    myTenantInfoHolder.addUser("acme", "john");
     
-    tenantInfoHolder.addTenant("starkindustries");
-    tenantInfoHolder.addUser("starkindustries", "tony");
+    myTenantInfoHolder.addTenant("starkindustries");
+    myTenantInfoHolder.addUser("starkindustries", "tony");
     
     
     // Booting up the Activiti Engine
     
-    MultiTenantProcessEngineConfigurationV2 config = new MultiTenantProcessEngineConfigurationV2(tenantInfoHolder);
+    MultiTenantProcessEngineConfigurationV2 config = new MultiTenantProcessEngineConfigurationV2(myTenantInfoHolder);
 
     config.setDatabaseType(MultiTenantProcessEngineConfigurationV2.DATABASE_TYPE_H2);
     config.setDatabaseSchemaUpdate(MultiTenantProcessEngineConfigurationV2.DB_SCHEMA_UPDATE_DROP_CREATE);
@@ -70,13 +70,13 @@ public class Main2 {
     config.setAsyncExecutorActivate(true);
     
 //    config.setAsyncExecutor(new ExecutorPerTenantAsyncExecutor(tenantInfoHolder));
-    config.setAsyncExecutor(new SharedExecutorServiceAsyncExecutor(tenantInfoHolder));
+    config.setAsyncExecutor(new SharedExecutorServiceAsyncExecutor(myTenantInfoHolder));
     
     config.registerTenant("alfresco", createDataSource("jdbc:h2:mem:activiti-alfresco;DB_CLOSE_DELAY=1000", "sa", ""));
     config.registerTenant("acme", createDataSource("jdbc:h2:mem:activiti-acme;DB_CLOSE_DELAY=1000", "sa", ""));
     config.registerTenant("starkindustries", createDataSource("jdbc:h2:mem:activiti-stark;DB_CLOSE_DELAY=1000", "sa", ""));
     
-    identityManagementService = tenantInfoHolder;
+    tenantInfoHolder = myTenantInfoHolder;
     
     processEngine = config.buildProcessEngine();
     
@@ -90,9 +90,9 @@ public class Main2 {
     startProcessInstances("tony");
     
     // Adding a new tenant
-    tenantInfoHolder.addTenant("dailyplanet");
-    tenantInfoHolder.addUser("dailyplanet", "louis");
-    tenantInfoHolder.addUser("dailyplanet", "clark");
+    myTenantInfoHolder.addTenant("dailyplanet");
+    myTenantInfoHolder.addUser("dailyplanet", "louis");
+    myTenantInfoHolder.addUser("dailyplanet", "clark");
     
     config.registerTenant("dailyplanet", createDataSource("jdbc:h2:mem:activiti-daily;DB_CLOSE_DELAY=1000", "sa", ""));
     
@@ -126,7 +126,7 @@ public class Main2 {
     System.out.println();
     System.out.println("Starting process instance for user " + userId);
     
-    identityManagementService.setCurrentUserId(userId);
+    tenantInfoHolder.setCurrentUserId(userId);
     
     Deployment deployment = processEngine.getRepositoryService().createDeployment()
           .addClasspathResource("oneTaskProcess.bpmn20.xml")
